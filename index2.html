@@ -1,0 +1,1762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ShopSphere AICV | AI Churn Prediction</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/ort.min.js"></script>
+
+<style>
+  :root{
+    --bg: #05070d;
+    --bg-1: #090d18;
+    --bg-2: #0d1322;
+    --card: rgba(255,255,255,0.035);
+    --card-hover: rgba(255,255,255,0.06);
+    --border: rgba(148,163,184,0.14);
+    --border-strong: rgba(148,163,184,0.28);
+    --text-hi: #eef2fb;
+    --text-lo: #8792a8;
+    --text-dim: #5b6478;
+    --cyan: #22d3ee;
+    --violet: #8b7cf6;
+    --rose: #fb7185;
+    --emerald: #34d399;
+    --amber: #fbbf24;
+    --font-display: 'Space Grotesk', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    --font-mono: 'IBM Plex Mono', monospace;
+  }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+
+  html{ scroll-behavior:smooth; }
+
+  body{
+    font-family: var(--font-body);
+    background: var(--bg);
+    color: var(--text-hi);
+    line-height: 1.65;
+    overflow-x:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  ::selection{ background: var(--cyan); color:#05070d; }
+
+  a{ color:inherit; }
+
+  .container{
+    width:min(1180px,92%);
+    margin:auto;
+    position:relative;
+    z-index:2;
+  }
+
+  /* ambient background: soft drifting mesh blobs, present through whole page */
+  .mesh{
+    position:fixed;
+    inset:0;
+    z-index:0;
+    pointer-events:none;
+    overflow:hidden;
+  }
+  .mesh span{
+    position:absolute;
+    border-radius:50%;
+    filter: blur(90px);
+    opacity:0.28;
+    animation: drift 26s ease-in-out infinite;
+  }
+  .mesh span:nth-child(1){ width:520px; height:520px; background:var(--violet); top:-160px; left:-120px; animation-delay:0s; }
+  .mesh span:nth-child(2){ width:460px; height:460px; background:var(--cyan); top:30%; right:-160px; animation-delay:-8s; }
+  .mesh span:nth-child(3){ width:400px; height:400px; background:var(--rose); bottom:-140px; left:20%; animation-delay:-16s; opacity:0.14; }
+
+  @keyframes drift{
+    0%,100%{ transform: translate(0,0) scale(1); }
+    50%{ transform: translate(40px,-50px) scale(1.12); }
+  }
+
+  /* cursor glow */
+  .cursor-glow{
+    position:fixed;
+    width:420px; height:420px;
+    border-radius:50%;
+    pointer-events:none;
+    background: radial-gradient(circle, rgba(34,211,238,0.10), transparent 70%);
+    transform: translate(-50%,-50%);
+    z-index:1;
+    transition: opacity .3s ease;
+    will-change: transform;
+  }
+
+  /* scroll progress */
+  .progress{
+    position:fixed;
+    top:0; left:0;
+    height:3px;
+    width:0%;
+    background: linear-gradient(90deg, var(--cyan), var(--violet));
+    z-index:999;
+    box-shadow: 0 0 12px rgba(34,211,238,0.6);
+  }
+
+  /* NAV */
+  nav{
+    position:fixed;
+    top:0; left:0; right:0;
+    z-index:100;
+    backdrop-filter: blur(16px);
+    background: rgba(5,7,13,0.55);
+    border-bottom:1px solid var(--border);
+    transition: background .3s ease;
+  }
+  .nav-inner{
+    width:min(1180px,92%);
+    margin:auto;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    height:66px;
+  }
+  .brand{
+    font-family: var(--font-display);
+    font-weight:600;
+    font-size:17px;
+    letter-spacing:0.2px;
+    display:flex;
+    align-items:center;
+    gap:9px;
+  }
+  .brand-dot{
+    width:9px; height:9px; border-radius:50%;
+    background: var(--cyan);
+    box-shadow: 0 0 10px var(--cyan), 0 0 20px var(--cyan);
+    animation: pulse-dot 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse-dot{
+    0%,100%{ opacity:1; transform:scale(1); }
+    50%{ opacity:0.55; transform:scale(0.75); }
+  }
+  .nav-links{
+    display:flex;
+    gap:34px;
+    list-style:none;
+  }
+  .nav-links a{
+    font-size:14px;
+    color: var(--text-lo);
+    text-decoration:none;
+    position:relative;
+    padding:4px 0;
+    transition: color .25s ease;
+  }
+  .nav-links a::after{
+    content:'';
+    position:absolute;
+    left:0; bottom:-2px;
+    width:0%;
+    height:1.5px;
+    background: linear-gradient(90deg,var(--cyan),var(--violet));
+    transition: width .3s ease;
+  }
+  .nav-links a:hover{ color: var(--text-hi); }
+  .nav-links a:hover::after{ width:100%; }
+
+  @media (max-width:760px){ .nav-links{ display:none; } }
+
+  /* HERO */
+  .hero{
+    position:relative;
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    padding:140px 0 100px;
+    overflow:hidden;
+  }
+  #particles{
+    position:absolute;
+    inset:0;
+    z-index:0;
+    opacity:0.65;
+  }
+  .hero-inner{
+    position:relative;
+    z-index:2;
+  }
+  .hero-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:9px;
+    background: rgba(139,124,246,0.08);
+    border:1px solid rgba(139,124,246,0.35);
+    padding:8px 16px;
+    border-radius:30px;
+    font-size:13px;
+    color:#c9c4ff;
+    margin-bottom:28px;
+    opacity:0;
+    animation: rise 0.9s ease forwards 0.1s;
+  }
+  .hero-badge .live-dot{
+    width:7px; height:7px; border-radius:50%;
+    background: var(--emerald);
+    box-shadow:0 0 8px var(--emerald);
+    animation: pulse-dot 1.8s infinite;
+  }
+
+  .hero h1{
+    font-family: var(--font-display);
+    font-weight:600;
+    font-size: clamp(42px, 6.4vw, 84px);
+    line-height:1.03;
+    letter-spacing:-1.5px;
+    max-width:900px;
+    opacity:0;
+    animation: rise 0.9s ease forwards 0.25s;
+  }
+  .hero h1 em{
+    font-style:normal;
+    background: linear-gradient(120deg, var(--cyan), var(--violet) 65%);
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+    background-size:200% 100%;
+    animation: gradient-shift 6s ease infinite;
+  }
+  @keyframes gradient-shift{
+    0%,100%{ background-position:0% 50%; }
+    50%{ background-position:100% 50%; }
+  }
+
+  .hero p.lede{
+    max-width:640px;
+    color: var(--text-lo);
+    font-size:19px;
+    margin-top:26px;
+    opacity:0;
+    animation: rise 0.9s ease forwards 0.4s;
+  }
+
+  .hero-meta{
+    margin-top:44px;
+    display:flex;
+    gap:44px;
+    flex-wrap:wrap;
+    opacity:0;
+    animation: rise 0.9s ease forwards 0.55s;
+  }
+  .hero-meta div{ border-left:1px solid var(--border-strong); padding-left:16px; }
+  .hero-meta .hm-value{
+    font-family: var(--font-mono);
+    font-size:26px;
+    font-weight:500;
+    color: var(--text-hi);
+  }
+  .hero-meta .hm-value.up{ color: var(--rose); }
+  .hero-meta .hm-label{
+    font-size:12.5px;
+    color: var(--text-dim);
+    margin-top:4px;
+  }
+
+  @keyframes rise{
+    from{ opacity:0; transform: translateY(22px); }
+    to{ opacity:1; transform: translateY(0); }
+  }
+
+  .scroll-cue{
+    position:absolute;
+    bottom:40px;
+    left:50%;
+    transform:translateX(-50%);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:8px;
+    color: var(--text-dim);
+    font-size:12px;
+    z-index:2;
+  }
+  .scroll-cue .line{
+    width:1px; height:34px;
+    background: linear-gradient(var(--text-dim), transparent);
+    position:relative;
+    overflow:hidden;
+  }
+  .scroll-cue .line::after{
+    content:'';
+    position:absolute;
+    top:-34px; left:0;
+    width:100%; height:100%;
+    background: linear-gradient(var(--cyan), transparent);
+    animation: scroll-run 2s ease-in-out infinite;
+  }
+  @keyframes scroll-run{
+    0%{ top:-34px; }
+    100%{ top:34px; }
+  }
+
+  /* SECTIONS */
+  section{ padding:120px 0; position:relative; }
+  .section-eyebrow{
+    font-family: var(--font-mono);
+    font-size:13px;
+    color: var(--cyan);
+    margin-bottom:14px;
+  }
+  .section-title{
+    font-family: var(--font-display);
+    font-weight:600;
+    font-size: clamp(28px,3.4vw,42px);
+    letter-spacing:-0.5px;
+    max-width:640px;
+  }
+  .section-description{
+    color: var(--text-lo);
+    max-width:620px;
+    margin-top:16px;
+    font-size:16.5px;
+  }
+
+  .reveal{
+    opacity:0;
+    transform: translateY(28px);
+    transition: opacity .8s cubic-bezier(.2,.7,.3,1), transform .8s cubic-bezier(.2,.7,.3,1);
+  }
+  .reveal.in{ opacity:1; transform:translateY(0); }
+  .reveal.d1{ transition-delay:.08s; }
+  .reveal.d2{ transition-delay:.16s; }
+  .reveal.d3{ transition-delay:.24s; }
+  .reveal.d4{ transition-delay:.32s; }
+
+  /* KPI CARDS */
+  .kpi-grid{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:18px;
+    margin-top:44px;
+  }
+  .kpi{
+    background: var(--card);
+    border:1px solid var(--border);
+    border-radius:16px;
+    padding:26px;
+    backdrop-filter: blur(10px);
+    transition: transform .35s cubic-bezier(.2,.7,.3,1), border-color .35s ease, background .35s ease;
+    transform-style:preserve-3d;
+    will-change: transform;
+    position:relative;
+    overflow:hidden;
+  }
+  .kpi::before{
+    content:'';
+    position:absolute;
+    inset:0;
+    background: linear-gradient(135deg, rgba(34,211,238,0.09), transparent 60%);
+    opacity:0;
+    transition:opacity .35s ease;
+  }
+  .kpi:hover{ border-color: var(--border-strong); background: var(--card-hover); }
+  .kpi:hover::before{ opacity:1; }
+  .kpi-label{ color: var(--text-lo); font-size:13.5px; margin-bottom:10px; }
+  .kpi-value{
+    font-family: var(--font-mono);
+    font-size:34px;
+    font-weight:500;
+    color: var(--text-hi);
+    letter-spacing:-0.5px;
+  }
+  .kpi-value.rose{ color: var(--rose); }
+  .kpi-value.cyan{ color: var(--cyan); }
+  .kpi-note{ font-size:12.5px; color: var(--text-dim); margin-top:6px; }
+
+  /* comparison bars */
+  .compare{ margin-top:40px; display:grid; gap:18px; max-width:720px; }
+  .compare-row{ display:grid; grid-template-columns:170px 1fr 90px; align-items:center; gap:16px; }
+  .compare-label{ font-size:14px; color: var(--text-lo); }
+  .compare-track{
+    height:12px;
+    background: rgba(255,255,255,0.05);
+    border-radius:8px;
+    overflow:hidden;
+    border:1px solid var(--border);
+  }
+  .compare-fill{
+    height:100%;
+    width:0%;
+    border-radius:8px;
+    transition: width 1.4s cubic-bezier(.16,.8,.2,1);
+  }
+  .compare-fill.base{ background: linear-gradient(90deg, var(--emerald), #10b981); }
+  .compare-fill.post{ background: linear-gradient(90deg, var(--rose), #f43f5e); }
+  .compare-value{ font-family:var(--font-mono); font-size:15px; text-align:right; }
+
+  .impact-box{
+    background: linear-gradient(135deg, rgba(251,113,133,0.08), rgba(139,124,246,0.05));
+    border:1px solid rgba(251,113,133,0.25);
+    padding:30px;
+    border-radius:18px;
+    margin-top:34px;
+    display:flex;
+    align-items:center;
+    gap:30px;
+    flex-wrap:wrap;
+  }
+  .impact-number{
+    font-family: var(--font-mono);
+    font-size:48px;
+    font-weight:600;
+    color: var(--rose);
+    white-space:nowrap;
+  }
+  .impact-box p{ color: var(--text-lo); max-width:480px; }
+
+  /* GRID / CARD */
+  .grid-2{ display:grid; grid-template-columns:repeat(2,1fr); gap:22px; }
+  .card{
+    background: var(--card);
+    border:1px solid var(--border);
+    border-radius:18px;
+    padding:32px;
+    backdrop-filter: blur(10px);
+    transition: transform .35s cubic-bezier(.2,.7,.3,1), border-color .3s ease;
+  }
+  .card:hover{ border-color: var(--border-strong); }
+  .card h3{ font-family:var(--font-display); font-weight:600; margin-bottom:14px; font-size:19px; }
+  .card p{ color: var(--text-lo); font-size:15px; }
+  .card p strong{ color: var(--text-hi); font-weight:500; }
+
+  /* STATS (dataset) */
+  .stats{ display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-top:44px; }
+  .stat{
+    background: linear-gradient(160deg, var(--bg-2), var(--bg-1));
+    border:1px solid var(--border);
+    padding:32px;
+    border-radius:18px;
+    text-align:center;
+    position:relative;
+    overflow:hidden;
+  }
+  .stat::after{
+    content:'';
+    position:absolute;
+    top:-40%; left:-20%;
+    width:60%; height:180%;
+    background: linear-gradient(120deg, transparent, rgba(255,255,255,0.06), transparent);
+    transform: rotate(15deg);
+    transition: left 1s ease;
+  }
+  .stat:hover::after{ left:120%; }
+  .stat-number{
+    font-family: var(--font-mono);
+    font-size:38px;
+    font-weight:600;
+    color: var(--cyan);
+  }
+  .stat-label{ color: var(--text-lo); font-size:14px; margin-top:8px; }
+
+  /* ARCHITECTURE FLOW */
+  .architecture{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:0;
+    flex-wrap:wrap;
+    margin-top:46px;
+  }
+  .arch-box{
+    background: var(--card);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:20px 22px;
+    text-align:center;
+    min-width:140px;
+    font-weight:500;
+    font-size:14px;
+    position:relative;
+    z-index:2;
+    transition: border-color .3s ease, transform .3s ease;
+  }
+  .arch-box:hover{ border-color: var(--cyan); transform: translateY(-4px); }
+  .arch-link{
+    width:64px;
+    height:2px;
+    position:relative;
+    background: rgba(148,163,184,0.15);
+    overflow:hidden;
+    flex-shrink:0;
+  }
+  .arch-link::after{
+    content:'';
+    position:absolute;
+    top:0; left:-40%;
+    width:40%; height:100%;
+    background: linear-gradient(90deg, transparent, var(--cyan), var(--violet), transparent);
+    animation: flow 2.4s linear infinite;
+  }
+  @keyframes flow{
+    0%{ left:-40%; }
+    100%{ left:100%; }
+  }
+  @media (max-width:800px){
+    .arch-link{ width:2px; height:34px; }
+    .arch-link::after{ top:-40%; left:0; width:100%; height:40%; animation-name: flow-v; }
+    @keyframes flow-v{ 0%{ top:-40%; } 100%{ top:100%; } }
+  }
+
+  /* MODEL CONFIG */
+  .config-list{ display:grid; grid-template-columns:repeat(2,1fr); gap:14px 30px; margin-top:6px; }
+  .config-row{
+    display:flex;
+    justify-content:space-between;
+    border-bottom:1px dashed var(--border);
+    padding-bottom:10px;
+    font-size:14.5px;
+  }
+  .config-row span:first-child{ color: var(--text-lo); }
+  .config-row span:last-child{ font-family: var(--font-mono); color: var(--text-hi); }
+
+  /* BUSINESS / threshold gauge */
+  .cost-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-top:44px; }
+  .cost-card{
+    background: var(--card);
+    border:1px solid var(--border);
+    border-radius:16px;
+    padding:30px;
+    text-align:center;
+    transition: transform .35s cubic-bezier(.2,.7,.3,1);
+  }
+  .cost-value{ font-family: var(--font-mono); font-size:32px; font-weight:600; color: var(--amber); margin:10px 0; }
+  .cost-label{ color: var(--text-lo); font-size:14px; }
+
+  .gauge-wrap{ margin-top:36px; max-width:640px; }
+  .gauge-track{
+    height:10px;
+    border-radius:6px;
+    background: linear-gradient(90deg, #1e293b, #1e293b);
+    position:relative;
+    overflow:visible;
+    border:1px solid var(--border);
+  }
+  .gauge-fill{
+    height:100%;
+    width:0%;
+    border-radius:6px;
+    background: linear-gradient(90deg, var(--emerald), var(--amber));
+    transition: width 1.6s cubic-bezier(.16,.8,.2,1);
+  }
+  .gauge-marker{
+    position:absolute;
+    top:-30px;
+    left:0%;
+    transform:translateX(-50%);
+    font-family: var(--font-mono);
+    font-size:13px;
+    color: var(--amber);
+    opacity:0;
+    transition: left 1.6s cubic-bezier(.16,.8,.2,1), opacity .6s ease .8s;
+    white-space:nowrap;
+  }
+  .gauge-marker::after{
+    content:'';
+    position:absolute;
+    bottom:-16px; left:50%;
+    transform:translateX(-50%);
+    width:2px; height:10px;
+    background: var(--amber);
+  }
+  .gauge-labels{ display:flex; justify-content:space-between; font-size:12px; color: var(--text-dim); margin-top:8px; }
+
+  /* BUTTON */
+  .button{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    margin-top:8px;
+    padding:14px 26px;
+    background: var(--text-hi);
+    color:#05070d;
+    text-decoration:none;
+    border-radius:10px;
+    font-weight:600;
+    font-size:14.5px;
+    transition: transform .3s cubic-bezier(.2,.7,.3,1), box-shadow .3s ease;
+  }
+  .button:hover{ transform: translateY(-3px); box-shadow: 0 10px 30px rgba(34,211,238,0.18); }
+
+  /* FOOTER */
+  footer{
+    border-top:1px solid var(--border);
+    padding:44px 0;
+    text-align:center;
+  }
+  footer p{ color: var(--text-dim); font-size:13.5px; }
+  footer p:first-child{ color: var(--text-lo); margin-bottom:6px; }
+
+  /* PLAYGROUND */
+  .playground-grid{
+    display:grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap:22px;
+    margin-top:44px;
+    align-items:stretch;
+  }
+  .sliders-panel{ display:flex; flex-direction:column; gap:22px; justify-content:center; }
+  .select-row label{ display:block; font-size:14px; color: var(--text-lo); margin-bottom:8px; }
+  .select-row select{
+    width:100%;
+    background: rgba(255,255,255,0.04);
+    border:1px solid var(--border);
+    color: var(--text-hi);
+    font-family: var(--font-body);
+    font-size:14.5px;
+    padding:10px 12px;
+    border-radius:8px;
+    outline:none;
+    cursor:pointer;
+  }
+  .select-row select:focus{ border-color: var(--cyan); }
+  .slider-row label{
+    display:flex;
+    justify-content:space-between;
+    font-size:14px;
+    color: var(--text-lo);
+    margin-bottom:10px;
+  }
+  .slider-row .slider-value{
+    font-family: var(--font-mono);
+    color: var(--text-hi);
+    font-weight:500;
+  }
+  input[type="range"]{
+    -webkit-appearance:none;
+    appearance:none;
+    width:100%;
+    height:4px;
+    border-radius:4px;
+    background: rgba(255,255,255,0.08);
+    outline:none;
+    cursor:pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    width:17px; height:17px;
+    border-radius:50%;
+    background: var(--cyan);
+    box-shadow: 0 0 0 4px rgba(34,211,238,0.16), 0 0 12px rgba(34,211,238,0.5);
+    cursor:pointer;
+    transition: transform .2s ease;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover{ transform: scale(1.15); }
+  input[type="range"]::-moz-range-thumb{
+    width:17px; height:17px;
+    border:none;
+    border-radius:50%;
+    background: var(--cyan);
+    box-shadow: 0 0 0 4px rgba(34,211,238,0.16), 0 0 12px rgba(34,211,238,0.5);
+    cursor:pointer;
+  }
+
+  .result-panel{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    background: linear-gradient(160deg, rgba(139,124,246,0.06), rgba(34,211,238,0.04));
+  }
+  .result-label{ color: var(--text-lo); font-size:14px; margin-bottom:10px; }
+  .result-value{
+    font-family: var(--font-mono);
+    font-size:56px;
+    font-weight:600;
+    line-height:1;
+    color: var(--cyan);
+    transition: color .3s ease;
+  }
+  .result-value.risk-high{ color: var(--rose); }
+  .result-value.risk-mid{ color: var(--amber); }
+  .result-bar-track{
+    width:100%;
+    max-width:280px;
+    height:8px;
+    border-radius:6px;
+    background: rgba(255,255,255,0.07);
+    overflow:hidden;
+    margin:18px 0 16px;
+  }
+  .result-bar-fill{
+    height:100%;
+    width:0%;
+    border-radius:6px;
+    background: linear-gradient(90deg, var(--emerald), var(--amber), var(--rose));
+    transition: width .4s cubic-bezier(.2,.7,.3,1);
+  }
+  .result-decision{
+    font-family: var(--font-display);
+    font-weight:600;
+    font-size:16px;
+    padding:8px 18px;
+    border-radius:30px;
+    border:1px solid var(--border-strong);
+  }
+  .result-decision.flag{ color: var(--rose); border-color: rgba(251,113,133,0.4); background: rgba(251,113,133,0.08); }
+  .result-decision.safe{ color: var(--emerald); border-color: rgba(52,211,153,0.4); background: rgba(52,211,153,0.08); }
+  .result-detail{ color: var(--text-dim); font-size:12.5px; margin-top:12px; max-width:260px; }
+
+  .playground-note{ color: var(--text-dim); font-size:13px; margin-top:18px; }
+
+  @media (max-width:800px){ .playground-grid{ grid-template-columns:1fr; } }
+
+  /* THRESHOLD EXPLORER */
+  .threshold-panel{ margin-top:44px; }
+  .threshold-slider-row{ display:flex; align-items:center; gap:20px; margin-bottom:8px; }
+  .threshold-slider-row input[type="range"]{ flex:1; }
+  .threshold-readout{
+    font-family: var(--font-mono);
+    font-size:20px;
+    color: var(--cyan);
+    min-width:64px;
+    text-align:right;
+  }
+  .threshold-ref{ font-size:12.5px; color: var(--text-dim); margin-bottom:26px; }
+  .threshold-stats{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:16px;
+  }
+  .t-stat{
+    background: var(--card);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:20px;
+    text-align:center;
+  }
+  .t-stat-value{
+    font-family: var(--font-mono);
+    font-size:24px;
+    font-weight:600;
+    color: var(--text-hi);
+  }
+  .t-stat-label{ color: var(--text-lo); font-size:12.5px; margin-top:6px; }
+  .t-stat-value.pos{ color: var(--emerald); }
+  .t-stat-value.neg{ color: var(--rose); }
+  @media (max-width:800px){ .threshold-stats{ grid-template-columns:repeat(2,1fr); } }
+
+  /* RISK TABLE */
+  .table-wrap{
+    margin-top:26px;
+    overflow-x:auto;
+    border:1px solid var(--border);
+    border-radius:16px;
+  }
+  table.risk-table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14px;
+    min-width:620px;
+  }
+  table.risk-table thead th{
+    text-align:left;
+    padding:14px 18px;
+    background: rgba(255,255,255,0.03);
+    color: var(--text-lo);
+    font-weight:500;
+    font-size:12.5px;
+    cursor:pointer;
+    user-select:none;
+    white-space:nowrap;
+    border-bottom:1px solid var(--border);
+    transition: color .2s ease;
+  }
+  table.risk-table thead th:hover{ color: var(--text-hi); }
+  table.risk-table thead th .arrow{ color: var(--cyan); margin-left:4px; }
+  table.risk-table tbody td{
+    padding:13px 18px;
+    border-bottom:1px solid var(--border);
+    font-family: var(--font-mono);
+    color: var(--text-hi);
+  }
+  table.risk-table tbody td:first-child{ font-family: var(--font-body); color: var(--text-hi); }
+  table.risk-table tbody tr{ transition: background .2s ease; }
+  table.risk-table tbody tr:hover{ background: rgba(255,255,255,0.02); }
+  table.risk-table tbody tr:last-child td{ border-bottom:none; }
+  .status-pill{
+    display:inline-block;
+    padding:4px 12px;
+    border-radius:20px;
+    font-family: var(--font-body);
+    font-size:12.5px;
+    font-weight:500;
+  }
+  .status-pill.flag{ background: rgba(251,113,133,0.12); color: var(--rose); }
+  .status-pill.safe{ background: rgba(52,211,153,0.12); color: var(--emerald); }
+
+  /* RESPONSIVE */
+  @media (max-width:800px){
+    .kpi-grid, .grid-2, .cost-grid, .stats, .config-list{ grid-template-columns:1fr; }
+    .compare-row{ grid-template-columns:1fr; text-align:left; }
+    .compare-value{ text-align:left; }
+    section{ padding:80px 0; }
+    .hero{ padding:120px 0 70px; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior:auto !important; }
+  }
+</style>
+</head>
+
+<body>
+
+<div class="mesh"><span></span><span></span><span></span></div>
+<div class="cursor-glow" id="cursorGlow"></div>
+<div class="progress" id="progressBar"></div>
+
+<nav>
+  <div class="nav-inner">
+    <div class="brand"><span class="brand-dot"></span> ShopSphere AICV</div>
+    <ul class="nav-links">
+      <li><a href="#impact">Impact</a></li>
+      <li><a href="#dataset">Dataset</a></li>
+      <li><a href="#model">Model</a></li>
+      <li><a href="#playground">Try it</a></li>
+      <li><a href="#business">Business</a></li>
+      <li><a href="#workflow">Workflow</a></li>
+      <li><a href="#notes">Notes</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- HERO -->
+<header class="hero">
+  <canvas id="particles"></canvas>
+  <div class="container hero-inner">
+    <div class="hero-badge"><span class="live-dot"></span> Live churn monitor · updated July 2026</div>
+    <h1>Watching an algorithm change<br>break customer <em>loyalty</em>.</h1>
+    <p class="lede">
+      ShopSphere AICV tracks how a single platform algorithm update rippled into a
+      sharp rise in cancellations — and the TabTransformer model built to catch it early.
+    </p>
+    <div class="hero-meta">
+      <div>
+        <div class="hm-value">3.55%</div>
+        <div class="hm-label">Baseline churn</div>
+      </div>
+      <div>
+        <div class="hm-value up">11.64%</div>
+        <div class="hm-label">Post-update churn</div>
+      </div>
+      <div>
+        <div class="hm-value up">+8.09pp</div>
+        <div class="hm-label">AICV change</div>
+      </div>
+      <div>
+        <div class="hm-value">74.1%</div>
+        <div class="hm-label">Model ROC-AUC</div>
+      </div>
+    </div>
+  </div>
+  <div class="scroll-cue"><span>scroll</span><span class="line"></span></div>
+</header>
+
+<!-- IMPACT -->
+<section id="impact">
+  <div class="container">
+    <div class="section-eyebrow reveal">01 · Algorithm shock</div>
+    <h2 class="section-title reveal d1">What the update did to churn</h2>
+    <p class="section-description reveal d2">
+      AICV compares the historical churn baseline against churn observed after the
+      ShopSphere algorithm update, isolating the size of the shock.
+    </p>
+
+    <div class="kpi-grid">
+      <div class="kpi reveal d1">
+        <div class="kpi-label">Historical baseline churn</div>
+        <div class="kpi-value" data-count="3.55" data-suffix="%">0%</div>
+        <div class="kpi-note">Pre-update period</div>
+      </div>
+      <div class="kpi reveal d2">
+        <div class="kpi-label">Post-update churn</div>
+        <div class="kpi-value rose" data-count="11.64" data-suffix="%">0%</div>
+        <div class="kpi-note">After algorithm change</div>
+      </div>
+      <div class="kpi reveal d3">
+        <div class="kpi-label">AICV change</div>
+        <div class="kpi-value rose" data-count="8.09" data-suffix="pp" data-prefix="+">0</div>
+        <div class="kpi-note">Post-update minus baseline</div>
+      </div>
+      <div class="kpi reveal d4">
+        <div class="kpi-label">Algorithm update</div>
+        <div class="kpi-value cyan">July 2026</div>
+        <div class="kpi-note">Shock / intervention point</div>
+      </div>
+    </div>
+
+    <div class="compare reveal">
+      <div class="compare-row">
+        <div class="compare-label">Baseline</div>
+        <div class="compare-track"><div class="compare-fill base" data-target="23"></div></div>
+        <div class="compare-value">3.55%</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-label">Post-update</div>
+        <div class="compare-track"><div class="compare-fill post" data-target="78"></div></div>
+        <div class="compare-value">11.64%</div>
+      </div>
+    </div>
+
+    <div class="impact-box reveal">
+      <div class="impact-number" data-count="8.09" data-prefix="+" data-suffix=" pp">0</div>
+      <p>
+        The post-update churn rate increased substantially compared with the historical
+        baseline, highlighting the business impact associated with the platform algorithm change.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- DATASET -->
+<section id="dataset">
+  <div class="container">
+    <div class="section-eyebrow reveal">02 · Data</div>
+    <h2 class="section-title reveal d1">Dataset overview</h2>
+    <p class="section-description reveal d2">
+      Longitudinal synthetic customer data created to model ShopSphere customer
+      behavior before and after the algorithm update.
+    </p>
+
+    <div class="stats">
+      <div class="stat reveal d1">
+        <div class="stat-number" data-count="12000" data-format="comma">0</div>
+        <div class="stat-label">Customer-month observations</div>
+      </div>
+      <div class="stat reveal d2">
+        <div class="stat-number" data-count="1000" data-format="comma">0</div>
+        <div class="stat-label">Unique customers</div>
+      </div>
+      <div class="stat reveal d3">
+        <div class="stat-number" data-count="12">0</div>
+        <div class="stat-label">Monthly observations per customer</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MODEL -->
+<section id="model">
+  <div class="container">
+    <div class="section-eyebrow reveal">03 · Model</div>
+    <h2 class="section-title reveal d1">The TabTransformer model</h2>
+    <p class="section-description reveal d2">
+      A custom TabTransformer-style neural network was trained to classify customer
+      churn using behavioral, engagement, visibility, pricing and satisfaction features.
+      Metrics below are from a cost-based decision threshold, not the default 0.50 —
+      see why underneath.
+    </p>
+
+    <div class="kpi-grid">
+      <div class="kpi reveal d1">
+        <div class="kpi-label">Accuracy</div>
+        <div class="kpi-value" data-count="44.56" data-suffix="%">0%</div>
+      </div>
+      <div class="kpi reveal d2">
+        <div class="kpi-label">Precision</div>
+        <div class="kpi-value" data-count="12.90" data-suffix="%">0%</div>
+      </div>
+      <div class="kpi reveal d3">
+        <div class="kpi-label">Recall</div>
+        <div class="kpi-value" data-count="84.71" data-suffix="%">0%</div>
+      </div>
+      <div class="kpi reveal d4">
+        <div class="kpi-value cyan" data-count="73.25" data-suffix="%">0%</div>
+        <div class="kpi-note" style="margin-top:-6px;">ROC-AUC</div>
+      </div>
+    </div>
+
+    <div class="impact-box reveal" style="margin-top:28px; background:linear-gradient(135deg, rgba(139,124,246,0.08), rgba(34,211,238,0.05)); border-color: rgba(139,124,246,0.25);">
+      <div>
+        <h3 style="font-family:var(--font-display); font-size:19px; margin-bottom:10px;">Why accuracy looks low</h3>
+        <p style="max-width:640px;">
+          The decision threshold is chosen to maximize expected retained value, not accuracy —
+          since missing a churner costs an assumed 25× more than an unnecessary retention
+          outreach, the optimal policy flags a much wider net of customers. That trades
+          accuracy for recall on purpose. At a precision of 12.9%, roughly <strong>7 out of
+          every 8 flagged customers are false alarms</strong> — a real deployment would need
+          to weigh that against how many customers a retention team can actually reach.
+        </p>
+      </div>
+    </div>
+
+    <div class="architecture reveal">
+      <div class="arch-box">Customer<br>features</div>
+      <div class="arch-link"></div>
+      <div class="arch-box">Categorical<br>embeddings</div>
+      <div class="arch-link"></div>
+      <div class="arch-box">Transformer<br>encoder</div>
+      <div class="arch-link"></div>
+      <div class="arch-box">Numerical<br>features</div>
+      <div class="arch-link"></div>
+      <div class="arch-box">Churn<br>probability</div>
+    </div>
+
+    <div class="card reveal" style="margin-top:30px;">
+      <h3>Model configuration</h3>
+      <div class="config-list">
+        <div class="config-row"><span>Embedding dimension</span><span>64</span></div>
+        <div class="config-row"><span>Attention heads</span><span>4</span></div>
+        <div class="config-row"><span>Transformer layers</span><span>2</span></div>
+        <div class="config-row"><span>Feed-forward dimension</span><span>96</span></div>
+        <div class="config-row"><span>Dropout</span><span>0.15</span></div>
+        <div class="config-row"><span>Decision threshold</span><span>0.17</span></div>
+      </div>
+    </div>
+
+    <h3 class="reveal" style="font-family:var(--font-display); font-size:19px; margin-top:50px; margin-bottom:6px;">Baseline comparison</h3>
+    <p class="section-description reveal" style="margin-top:0;">
+      Logistic Regression and Histogram Gradient Boosting, trained on identical data splits
+      and evaluated with the same cost-based threshold logic.
+    </p>
+    <div class="table-wrap reveal">
+      <table class="risk-table">
+        <thead>
+          <tr><th>Model</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>ROC-AUC</th><th>Threshold</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Logistic Regression</td>
+            <td>50.9%</td>
+            <td><span class="status-pill safe">14.0%</span></td>
+            <td>81.8%</td>
+            <td><span class="status-pill safe">23.9%</span></td>
+            <td><span class="status-pill safe">73.5%</span></td>
+            <td>0.35</td>
+          </tr>
+          <tr>
+            <td>Gradient Boosting</td>
+            <td>14.5%</td>
+            <td>9.9%</td>
+            <td><span class="status-pill safe">98.8%</span></td>
+            <td>17.9%</td>
+            <td>68.2%</td>
+            <td>0.02</td>
+          </tr>
+          <tr>
+            <td>TabTransformer (deployed)</td>
+            <td>44.6%</td>
+            <td>12.9%</td>
+            <td>84.7%</td>
+            <td>22.4%</td>
+            <td>73.3%</td>
+            <td>0.17</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="playground-note reveal">
+      Logistic Regression matches or slightly exceeds the TabTransformer on precision,
+      F1, and ROC-AUC. On a dataset this size (1,000 customers), that's expected — the
+      added architectural complexity isn't earning its keep here. The TabTransformer was
+      retained for this project because it was the assigned architecture, not because the
+      comparison favors it. Gradient Boosting's threshold collapsed to near-zero, flagging
+      almost every customer — a sign its probabilities aren't well-calibrated out of the box,
+      not a genuinely useful policy.
+    </p>
+  </div>
+</section>
+
+<!-- PLAYGROUND -->
+<section id="playground">
+  <div class="container">
+    <div class="section-eyebrow reveal">04 · Try it</div>
+    <h2 class="section-title reveal d1">Estimate churn risk yourself</h2>
+    <p class="section-description reveal d2" id="model-status">
+      Loading the trained model weights (~1 MB) for real in-browser inference…
+    </p>
+
+    <div class="playground-grid reveal">
+      <div class="sliders-panel card">
+        <div class="select-row">
+          <label>Customer segment</label>
+          <select id="customer_segment">
+            <option value="Budget">Budget</option>
+            <option value="Regular" selected>Regular</option>
+            <option value="Premium">Premium</option>
+            <option value="VIP">VIP</option>
+          </select>
+        </div>
+        <div class="select-row">
+          <label>Subscription type</label>
+          <select id="subscription_type">
+            <option value="Basic" selected>Basic</option>
+            <option value="Plus">Plus</option>
+            <option value="Premium">Premium</option>
+          </select>
+        </div>
+        <div class="select-row">
+          <label>AICV period</label>
+          <select id="period">
+            <option value="Historical">Historical</option>
+            <option value="Update">Algorithm update</option>
+            <option value="Post-Update" selected>Post-update</option>
+          </select>
+        </div>
+
+        <div class="slider-row">
+          <label>Tenure <span class="slider-value" id="val-tenure_months">14 mo</span></label>
+          <input type="range" id="tenure_months" min="1" max="60" value="14">
+        </div>
+        <div class="slider-row">
+          <label>Product visibility score <span class="slider-value" id="val-product_visibility_score">55</span></label>
+          <input type="range" id="product_visibility_score" min="20" max="100" value="55">
+        </div>
+        <div class="slider-row">
+          <label>Activity change since update <span class="slider-value" id="val-activity_change_pct">-15%</span></label>
+          <input type="range" id="activity_change_pct" min="-40" max="20" value="-15">
+        </div>
+        <div class="slider-row">
+          <label>Discount usage rate <span class="slider-value" id="val-discount_usage_rate">35%</span></label>
+          <input type="range" id="discount_usage_rate" min="5" max="70" value="35">
+        </div>
+        <div class="slider-row">
+          <label>Satisfaction score <span class="slider-value" id="val-satisfaction_score">6.0 / 10</span></label>
+          <input type="range" id="satisfaction_score" min="0" max="100" value="60">
+        </div>
+        <div class="slider-row">
+          <label>Complaints logged <span class="slider-value" id="val-complaints_count">1</span></label>
+          <input type="range" id="complaints_count" min="0" max="5" value="1">
+        </div>
+      </div>
+
+      <div class="result-panel card">
+        <div class="result-label">Churn probability — real model output</div>
+        <div class="result-value" id="churn-prob">—</div>
+        <div class="result-bar-track"><div class="result-bar-fill" id="churn-bar"></div></div>
+        <div class="result-decision" id="churn-decision">—</div>
+        <div class="result-detail" id="churn-detail">Waiting for the model to load…</div>
+      </div>
+    </div>
+    <p class="playground-note reveal">Every field above feeds the actual trained TabTransformer weights via ONNX Runtime, running in your browser. The 16 numerical features not shown here are held at their training-set average for each prediction.</p>
+  </div>
+</section>
+
+<!-- BUSINESS -->
+<section id="business">
+  <div class="container">
+    <div class="section-eyebrow reveal">05 · Decision strategy</div>
+    <h2 class="section-title reveal d1">Business cost & decision strategy</h2>
+    <p class="section-description reveal d2">
+      The model supports retention prioritization by balancing the cost of unnecessary
+      interventions against the potential value lost when a churner is missed.
+    </p>
+
+    <div class="cost-grid">
+      <div class="cost-card reveal d1">
+        <div class="cost-label">Intervention cost</div>
+        <div class="cost-value" data-count="200" data-prefix="₹">0</div>
+        <div class="cost-label">Illustrative assumption</div>
+      </div>
+      <div class="cost-card reveal d2">
+        <div class="cost-label">Lost customer value</div>
+        <div class="cost-value" data-count="5000" data-prefix="₹" data-format="comma">0</div>
+        <div class="cost-label">Illustrative assumption</div>
+      </div>
+      <div class="cost-card reveal d3">
+        <div class="cost-label">FN cost ratio</div>
+        <div class="cost-value" data-count="25" data-suffix="×">0</div>
+        <div class="cost-label">Potential cost comparison</div>
+      </div>
+    </div>
+
+    <div class="threshold-panel reveal">
+      <h3 style="font-family:var(--font-display); font-size:19px; margin-bottom:16px;">Drag the decision threshold</h3>
+      <div class="threshold-slider-row">
+        <input type="range" id="threshold" min="0" max="100" value="17">
+        <div class="threshold-readout" id="threshold-readout">0.17</div>
+      </div>
+      <div class="threshold-ref">
+        Model default sits at 0.17 · scored by the real trained model on 400 synthetic
+        customers generated in your browser. Since these customers are synthetic, there's
+        no observed outcome for them — each one's "actual churn" is simulated by drawing
+        from that customer's own model-predicted probability, so precision/recall here
+        describe the policy's expected behavior, not a measured result on real data.
+      </div>
+
+      <div class="threshold-stats">
+        <div class="t-stat">
+          <div class="t-stat-value" id="stat-flagged">—</div>
+          <div class="t-stat-label">Customers flagged</div>
+        </div>
+        <div class="t-stat">
+          <div class="t-stat-value" id="stat-precision">—</div>
+          <div class="t-stat-label">Precision (simulated)</div>
+        </div>
+        <div class="t-stat">
+          <div class="t-stat-value" id="stat-recall">—</div>
+          <div class="t-stat-label">Recall (simulated)</div>
+        </div>
+        <div class="t-stat">
+          <div class="t-stat-value" id="stat-net">—</div>
+          <div class="t-stat-label">Net expected impact</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="impact-box reveal" style="margin-top:34px; background:linear-gradient(135deg, rgba(139,124,246,0.08), rgba(34,211,238,0.05)); border-color: rgba(139,124,246,0.25);">
+      <div>
+        <h3 style="font-family:var(--font-display); font-size:19px; margin-bottom:10px;">Business decision</h3>
+        <p style="max-width:620px;">
+          Customers with elevated predicted churn probability can be prioritized for
+          retention interventions. The 0.17 decision threshold maximizes expected net
+          value under the ₹200-vs-₹5,000 cost assumption — but as shown above, at this
+          precision (12.9% on the real held-out test set) most flagged customers will be
+          false alarms. That's a deliberate tradeoff for this cost ratio, not a flaw to
+          hide, and any real deployment should weigh it against retention-team capacity.
+        </p>
+      </div>
+    </div>
+
+    <h3 class="reveal" style="font-family:var(--font-display); font-size:19px; margin-top:50px; margin-bottom:6px;">Sample customer queue</h3>
+    <p class="section-description reveal" style="margin-top:0; margin-bottom:0;">
+      Synthetic customers, scored by the real model. Flag status updates live as you move
+      the threshold above — click any column to re-sort.
+    </p>
+    <div class="table-wrap reveal">
+      <table class="risk-table">
+        <thead>
+          <tr>
+            <th data-key="name">Customer</th>
+            <th data-key="tenure">Tenure (mo)</th>
+            <th data-key="visibility">Visibility</th>
+            <th data-key="satisfaction">Satisfaction</th>
+            <th data-key="segment">Segment</th>
+            <th data-key="score">Churn risk</th>
+            <th data-key="score">Status</th>
+          </tr>
+        </thead>
+        <tbody id="risk-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+
+<!-- WORKFLOW -->
+<section id="workflow">
+  <div class="container">
+    <div class="section-eyebrow reveal">06 · Pipeline</div>
+    <h2 class="section-title reveal d1">End-to-end analytics workflow</h2>
+
+    <div class="architecture reveal">
+      <div class="arch-box">ShopSphere<br>data</div>
+      <div class="arch-link"></div>
+      <div class="arch-box">AICV<br>analysis</div>
+      <div class="arch-link"></div>
+      <div class="arch-box">Power BI<br>dashboard</div>
+      <div class="arch-link"></div>
+      <div class="arch-box">TabTransformer<br>model</div>
+      <div class="arch-link"></div>
+      <div class="arch-box">Retention<br>decision</div>
+    </div>
+
+    <div style="text-align:center; margin-top:40px;" class="reveal">
+      <a class="button" href="https://huggingface.co/Mihirrish/ShopSphere-AICV-TabTransformer" target="_blank">
+        View the model on Hugging Face
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- NOTES -->
+<section id="notes">
+  <div class="container">
+    <div class="section-eyebrow reveal">07 · Notes</div>
+    <div class="card reveal">
+      <h2 class="section-title" style="font-size:26px; margin-bottom:18px;">Project note</h2>
+      <p>
+        This project uses a synthetic dataset created for academic demonstration. The
+        observed relationship between the algorithm update and churn should therefore
+        not be interpreted as causal evidence from a real commercial platform.
+      </p>
+      <br>
+      <p>
+        Model performance should be evaluated further on real-world customer data
+        before deployment in an operational retention system.
+      </p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <p>ShopSphere AICV · Customer churn analytics</p>
+    <p>Built for academic demonstration using Power BI, PyTorch and Hugging Face.</p>
+  </div>
+</footer>
+
+<script>
+// ---------- scroll progress ----------
+const progressBar = document.getElementById('progressBar');
+function updateProgress(){
+  const h = document.documentElement;
+  const scrolled = (h.scrollTop) / (h.scrollHeight - h.clientHeight) * 100;
+  progressBar.style.width = scrolled + '%';
+}
+document.addEventListener('scroll', updateProgress);
+
+// ---------- cursor glow ----------
+const glow = document.getElementById('cursorGlow');
+let gx = window.innerWidth/2, gy = window.innerHeight/2, cx = gx, cy = gy;
+window.addEventListener('mousemove', e => { gx = e.clientX; gy = e.clientY; });
+function animateGlow(){
+  cx += (gx - cx) * 0.12;
+  cy += (gy - cy) * 0.12;
+  glow.style.transform = `translate(${cx}px, ${cy}px) translate(-50%,-50%)`;
+  requestAnimationFrame(animateGlow);
+}
+animateGlow();
+
+// ---------- reveal on scroll ----------
+const revealEls = document.querySelectorAll('.reveal');
+const io = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if(entry.isIntersecting){
+      entry.target.classList.add('in');
+      io.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.15 });
+revealEls.forEach(el => io.observe(el));
+
+// ---------- count-up numbers ----------
+function formatNumber(n, format){
+  if(format === 'comma') return Math.round(n).toLocaleString('en-US');
+  return n % 1 === 0 ? n.toFixed(0) : n.toFixed(2);
+}
+function countUp(el){
+  const target = parseFloat(el.dataset.count);
+  const prefix = el.dataset.prefix || '';
+  const suffix = el.dataset.suffix || '';
+  const format = el.dataset.format || '';
+  const duration = 1500;
+  const start = performance.now();
+  function tick(now){
+    const p = Math.min((now - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - p, 3);
+    const value = target * eased;
+    el.textContent = prefix + formatNumber(value, format) + suffix;
+    if(p < 1) requestAnimationFrame(tick);
+    else el.textContent = prefix + formatNumber(target, format) + suffix;
+  }
+  requestAnimationFrame(tick);
+}
+const countEls = document.querySelectorAll('[data-count]');
+const countIo = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if(entry.isIntersecting){
+      countUp(entry.target);
+      countIo.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.4 });
+countEls.forEach(el => countIo.observe(el));
+
+// ---------- comparison + gauge fills ----------
+const fillEls = document.querySelectorAll('.compare-fill, .gauge-fill');
+const fillIo = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if(entry.isIntersecting){
+      entry.target.style.width = entry.target.dataset.target + '%';
+      fillIo.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.4 });
+fillEls.forEach(el => fillIo.observe(el));
+
+const markerEls = document.querySelectorAll('.gauge-marker');
+const markerIo = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if(entry.isIntersecting){
+      entry.target.style.left = entry.target.dataset.target + '%';
+      entry.target.style.opacity = '1';
+      markerIo.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.4 });
+markerEls.forEach(el => markerIo.observe(el));
+
+// ---------- card tilt ----------
+document.querySelectorAll('.kpi, .card:not(.sliders-panel):not(.result-panel), .cost-card, .stat, .arch-box').forEach(card => {
+  card.addEventListener('mousemove', (e) => {
+    const r = card.getBoundingClientRect();
+    const x = e.clientX - r.left;
+    const y = e.clientY - r.top;
+    const rx = ((y / r.height) - 0.5) * -6;
+    const ry = ((x / r.width) - 0.5) * 6;
+    card.style.transform = `perspective(700px) rotateX(${rx}deg) rotateY(${ry}deg) translateY(-2px)`;
+  });
+  card.addEventListener('mouseleave', () => {
+    card.style.transform = 'perspective(700px) rotateX(0) rotateY(0) translateY(0)';
+  });
+});
+
+// ---------- hero particle network ----------
+const canvas = document.getElementById('particles');
+const ctx = canvas.getContext('2d');
+let particles = [];
+const hero = document.querySelector('.hero');
+
+function resizeCanvas(){
+  canvas.width = hero.offsetWidth;
+  canvas.height = hero.offsetHeight;
+}
+function initParticles(){
+  const count = Math.min(70, Math.floor(canvas.width / 22));
+  particles = Array.from({length: count}, () => ({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height,
+    vx: (Math.random() - 0.5) * 0.35,
+    vy: (Math.random() - 0.5) * 0.35,
+    r: Math.random() * 1.6 + 0.6
+  }));
+}
+resizeCanvas();
+initParticles();
+window.addEventListener('resize', () => { resizeCanvas(); initParticles(); });
+
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function drawParticles(){
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for(let i = 0; i < particles.length; i++){
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    if(p.x < 0 || p.x > canvas.width) p.vx *= -1;
+    if(p.y < 0 || p.y > canvas.height) p.vy *= -1;
+
+    for(let j = i + 1; j < particles.length; j++){
+      const q = particles[j];
+      const dx = p.x - q.x, dy = p.y - q.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if(dist < 130){
+        ctx.strokeStyle = `rgba(139,124,246,${0.16 * (1 - dist/130)})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(q.x, q.y);
+        ctx.stroke();
+      }
+    }
+
+    ctx.fillStyle = 'rgba(34,211,238,0.75)';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  if(!reduceMotion) requestAnimationFrame(drawParticles);
+}
+drawParticles();
+
+// ================= INTERACTIVE PLAYGROUND =================
+
+// ================= REAL MODEL CONFIG (from the trained pipeline) =================
+const ONNX_PATH = "./shopsphere_tabtransformer.onnx";
+const RISK_THRESHOLD = 0.16999999999999996;
+
+const CATEGORICAL_FEATURES = ["gender", "region", "customer_segment", "subscription_type", "period"];
+const CATEGORY_MAPS = {
+  gender: {"Female": 1, "Male": 2, "Other": 3},
+  region: {"Central": 1, "East": 2, "North": 3, "South": 4, "West": 5},
+  customer_segment: {"Budget": 1, "Premium": 2, "Regular": 3, "VIP": 4},
+  subscription_type: {"Basic": 1, "Plus": 2, "Premium": 3},
+  period: {"Historical": 1, "Post-Update": 2, "Update": 3},
+};
+
+const NUMERICAL_FEATURES = [
+  "age", "tenure_months", "monthly_sessions", "avg_session_duration", "product_views",
+  "search_frequency", "add_to_cart_rate", "purchase_frequency", "average_order_value",
+  "discount_usage_rate", "product_visibility_score", "search_ranking_position",
+  "recommendation_exposure_rate", "recommendation_click_rate", "pricing_access_score",
+  "competitor_price_gap", "discount_availability", "satisfaction_score", "delivery_rating",
+  "support_tickets", "complaints_count", "activity_change_pct",
+];
+const SCALER_MEAN = [43.8, 30.107142857142858, 7.867380952380953, 10.675971428571428, 39.29261904761905, 4.798928571428571, 0.2509357380952381, 0.7966892857142857, 902.3427535714287, 0.36474263095238096, 70.83590714285715, 7.421782142857143, 61.63953333333333, 0.06185967857142857, 74.4721, 6.072389285714285, 64.9355011904762, 9.326557142857142, 4.096419047619048, 0.5054761904761905, 0.1498809523809524, -6.386742857142857];
+const SCALER_SCALE = [15.277901875397868, 15.990933336725277, 2.954501456231708, 1.7989347996715688, 17.171927334422445, 1.9404034422530492, 0.03400457306679817, 0.42844511637121846, 220.61671092190903, 0.06997668016650768, 11.054682014377285, 2.104995578021637, 11.273926261673472, 0.02217147291199121, 9.277883946168513, 2.6831502883523326, 10.177188577600703, 0.7139419771484892, 0.45353378161473223, 0.7320672047635035, 0.3964575100262774, 12.204662797884588];
+
+const DEFAULT_CATEGORICAL = {gender: "Female", region: "Central", customer_segment: "Regular", subscription_type: "Basic", period: "Post-Update"};
+
+function sigmoid(x){ return 1 / (1 + Math.exp(-x)); }
+
+// ---------- seeded RNG so the synthetic demo pool is stable across reloads ----------
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const rng = mulberry32(20260701);
+
+// ---------- build a full 22-numeric + 5-categorical feature row, filling gaps with training means ----------
+function buildFeatureRow(catOverrides, numOverrides){
+  const cat = {...DEFAULT_CATEGORICAL, ...catOverrides};
+  const catIds = CATEGORICAL_FEATURES.map(f => (CATEGORY_MAPS[f][cat[f]] ?? 0));
+
+  const numRaw = NUMERICAL_FEATURES.map((f, i) => {
+    if(numOverrides && Object.prototype.hasOwnProperty.call(numOverrides, f)) return numOverrides[f];
+    return SCALER_MEAN[i];
+  });
+  const numScaled = numRaw.map((v, i) => (v - SCALER_MEAN[i]) / SCALER_SCALE[i]);
+  return {catIds, numScaled};
+}
+
+// ---------- ONNX model loading ----------
+let ortSession = null;
+let modelReady = false;
+
+async function loadModel(){
+  const statusEl = document.getElementById("model-status");
+  try{
+    ortSession = await ort.InferenceSession.create(ONNX_PATH);
+    modelReady = true;
+    if(statusEl) statusEl.textContent = "Real inference, running live in your browser via the exported ONNX model.";
+  } catch(err){
+    console.error("Model load failed:", err);
+    if(statusEl) statusEl.textContent = "Couldn't load the model file in this environment — make sure shopsphere_tabtransformer.onnx sits alongside index.html.";
+  }
+}
+
+// ---------- single-row inference ----------
+async function scoreOne(catOverrides, numOverrides){
+  const {catIds, numScaled} = buildFeatureRow(catOverrides, numOverrides);
+  const xCat = new ort.Tensor("int64", BigInt64Array.from(catIds.map(BigInt)), [1, CATEGORICAL_FEATURES.length]);
+  const xNum = new ort.Tensor("float32", Float32Array.from(numScaled), [1, NUMERICAL_FEATURES.length]);
+  const output = await ortSession.run({x_cat: xCat, x_num: xNum});
+  const logit = output.logit.data[0];
+  return sigmoid(logit);
+}
+
+// ---------- batch inference, for scoring the whole synthetic pool in one call ----------
+async function scoreBatch(rows){
+  const n = rows.length;
+  const catFlat = new BigInt64Array(n * CATEGORICAL_FEATURES.length);
+  const numFlat = new Float32Array(n * NUMERICAL_FEATURES.length);
+  rows.forEach((row, i) => {
+    row.catIds.forEach((v, j) => { catFlat[i * CATEGORICAL_FEATURES.length + j] = BigInt(v); });
+    row.numScaled.forEach((v, j) => { numFlat[i * NUMERICAL_FEATURES.length + j] = v; });
+  });
+  const xCat = new ort.Tensor("int64", catFlat, [n, CATEGORICAL_FEATURES.length]);
+  const xNum = new ort.Tensor("float32", numFlat, [n, NUMERICAL_FEATURES.length]);
+  const output = await ortSession.run({x_cat: xCat, x_num: xNum});
+  return Array.from(output.logit.data).map(sigmoid);
+}
+
+// ================= "Try it yourself" estimator =================
+const estimatorSliderIds = ["tenure_months", "product_visibility_score", "activity_change_pct", "discount_usage_rate", "satisfaction_score", "complaints_count"];
+const estimatorSelectIds = ["customer_segment", "subscription_type", "period"];
+
+function readEstimatorInputs(){
+  const catOverrides = {};
+  estimatorSelectIds.forEach(id => { catOverrides[id] = document.getElementById(id).value; });
+
+  const numOverrides = {
+    tenure_months: parseFloat(document.getElementById("tenure_months").value),
+    product_visibility_score: parseFloat(document.getElementById("product_visibility_score").value),
+    activity_change_pct: parseFloat(document.getElementById("activity_change_pct").value),
+    discount_usage_rate: parseFloat(document.getElementById("discount_usage_rate").value) / 100,
+    satisfaction_score: parseFloat(document.getElementById("satisfaction_score").value) / 10,
+    complaints_count: parseFloat(document.getElementById("complaints_count").value),
+  };
+  return {catOverrides, numOverrides};
+}
+
+async function updateEstimator(){
+  document.getElementById("val-tenure_months").textContent = document.getElementById("tenure_months").value + " mo";
+  document.getElementById("val-product_visibility_score").textContent = document.getElementById("product_visibility_score").value;
+  document.getElementById("val-activity_change_pct").textContent = document.getElementById("activity_change_pct").value + "%";
+  document.getElementById("val-discount_usage_rate").textContent = document.getElementById("discount_usage_rate").value + "%";
+  document.getElementById("val-satisfaction_score").textContent = (parseFloat(document.getElementById("satisfaction_score").value) / 10).toFixed(1) + " / 10";
+  document.getElementById("val-complaints_count").textContent = document.getElementById("complaints_count").value;
+
+  const probEl = document.getElementById("churn-prob");
+  const barEl = document.getElementById("churn-bar");
+  const decisionEl = document.getElementById("churn-decision");
+  const detailEl = document.getElementById("churn-detail");
+
+  if(!modelReady){
+    detailEl.textContent = "Waiting for the model to finish loading…";
+    return;
+  }
+
+  const {catOverrides, numOverrides} = readEstimatorInputs();
+  const prob = await scoreOne(catOverrides, numOverrides);
+  const pct = prob * 100;
+
+  probEl.textContent = pct.toFixed(1) + "%";
+  barEl.style.width = Math.min(pct, 100) + "%";
+
+  probEl.classList.remove("risk-high", "risk-mid");
+  if(prob >= RISK_THRESHOLD){ probEl.classList.add("risk-high"); }
+  else if(prob >= RISK_THRESHOLD * 0.6){ probEl.classList.add("risk-mid"); }
+
+  if(prob >= RISK_THRESHOLD){
+    decisionEl.textContent = "Flag for retention outreach";
+    decisionEl.className = "result-decision flag";
+    detailEl.textContent = `Above the ${RISK_THRESHOLD.toFixed(2)} decision threshold — real model output, not an approximation.`;
+  } else {
+    decisionEl.textContent = "No intervention needed";
+    decisionEl.className = "result-decision safe";
+    detailEl.textContent = `Below the ${RISK_THRESHOLD.toFixed(2)} decision threshold.`;
+  }
+}
+
+[...estimatorSliderIds, ...estimatorSelectIds].forEach(id => {
+  const el = document.getElementById(id);
+  if(el) el.addEventListener("input", updateEstimator);
+});
+
+// ================= Synthetic customer pool for the threshold explorer =================
+const firstNames = ["Aarav","Priya","Rohan","Sneha","Vikram","Ananya","Karan","Isha","Dev","Meera","Arjun","Divya","Sahil","Neha","Rahul","Tanvi","Yash","Riya","Aditya","Pooja"];
+const lastNames = ["Sharma","Verma","Iyer","Nair","Gupta","Kapoor","Rao","Mehta","Chauhan","Bose"];
+const segmentChoices = ["Budget", "Regular", "Premium", "VIP"];
+const periodChoices = ["Historical", "Update", "Post-Update"];
+
+let customerPool = [];
+let tableSample = [];
+
+function makeSyntheticRows(n){
+  const rows = [];
+  for(let i = 0; i < n; i++){
+    const tenure = 1 + rng() * 59;
+    const visibility = 20 + rng() * 80;
+    const satisfaction = 2 + rng() * 8;
+    const activity = -40 + rng() * 60;
+    const segment = segmentChoices[Math.floor(rng() * segmentChoices.length)];
+    const period = rng() < 0.4 ? "Post-Update" : periodChoices[Math.floor(rng() * periodChoices.length)];
+
+    const catOverrides = {customer_segment: segment, period};
+    const numOverrides = {
+      tenure_months: tenure,
+      product_visibility_score: visibility,
+      satisfaction_score: satisfaction,
+      activity_change_pct: activity,
+    };
+    const {catIds, numScaled} = buildFeatureRow(catOverrides, numOverrides);
+    rows.push({
+      name: firstNames[Math.floor(rng()*firstNames.length)] + " " + lastNames[Math.floor(rng()*lastNames.length)],
+      tenure: Math.round(tenure),
+      visibility: Math.round(visibility),
+      satisfaction: Math.round((satisfaction / 2) * 10) / 10,
+      segment,
+      catIds, numScaled,
+    });
+  }
+  return rows;
+}
+
+async function buildCustomerPool(){
+  const rows = makeSyntheticRows(400);
+  const scores = await scoreBatch(rows);
+  customerPool = rows.map((row, i) => ({
+    ...row,
+    score: scores[i],
+    // Simulated outcome: drawn from the model's OWN predicted probability for this
+    // synthetic customer, since there's no real observed label to compare against.
+    simulatedChurn: rng() < scores[i],
+  }));
+  tableSample = customerPool.slice(0, 14).sort((a, b) => b.score - a.score);
+}
+
+// ---------- threshold explorer ----------
+const thresholdSlider = document.getElementById("threshold");
+const thresholdReadout = document.getElementById("threshold-readout");
+const statFlagged = document.getElementById("stat-flagged");
+const statPrecision = document.getElementById("stat-precision");
+const statRecall = document.getElementById("stat-recall");
+const statNet = document.getElementById("stat-net");
+
+function formatCurrency(n){
+  const sign = n < 0 ? "-" : "";
+  return sign + "₹" + Math.round(Math.abs(n)).toLocaleString("en-US");
+}
+
+function updateThreshold(){
+  if(!customerPool.length) return;
+  const t = parseFloat(thresholdSlider.value) / 100;
+  thresholdReadout.textContent = t.toFixed(2);
+
+  let tp = 0, fp = 0, fn = 0;
+  customerPool.forEach(c => {
+    const flagged = c.score >= t;
+    if(flagged && c.simulatedChurn) tp++;
+    else if(flagged && !c.simulatedChurn) fp++;
+    else if(!flagged && c.simulatedChurn) fn++;
+  });
+  const flaggedCount = tp + fp;
+  const precision = flaggedCount ? (tp / flaggedCount) * 100 : 0;
+  const recall = (tp + fn) ? (tp / (tp + fn)) * 100 : 0;
+  const netImpact = (tp * 5000) - (flaggedCount * 200);
+
+  statFlagged.textContent = flaggedCount.toLocaleString("en-US") + " / " + customerPool.length;
+  statPrecision.textContent = precision.toFixed(1) + "%";
+  statRecall.textContent = recall.toFixed(1) + "%";
+  statNet.textContent = formatCurrency(netImpact);
+  statNet.className = "t-stat-value " + (netImpact >= 0 ? "pos" : "neg");
+
+  renderTable();
+}
+
+function renderTable(){
+  const t = parseFloat(thresholdSlider.value) / 100;
+  const body = document.getElementById("risk-table-body");
+  body.innerHTML = tableSample.map(c => {
+    const flagged = c.score >= t;
+    return `<tr>
+      <td>${c.name}</td>
+      <td>${c.tenure}</td>
+      <td>${c.visibility}</td>
+      <td>${c.satisfaction.toFixed(1)}</td>
+      <td>${c.segment}</td>
+      <td>${(c.score*100).toFixed(1)}%</td>
+      <td><span class="status-pill ${flagged ? 'flag' : 'safe'}">${flagged ? 'Flagged' : 'No action'}</span></td>
+    </tr>`;
+  }).join("");
+}
+
+thresholdSlider.addEventListener("input", updateThreshold);
+
+// ---------- sortable table headers ----------
+let sortState = {key: "score", asc: false};
+document.querySelectorAll("table.risk-table thead th").forEach(th => {
+  th.addEventListener("click", () => {
+    const key = th.dataset.key;
+    document.querySelectorAll("table.risk-table thead th").forEach(h => h.querySelector(".arrow")?.remove());
+    if(sortState.key === key) sortState.asc = !sortState.asc;
+    else { sortState.key = key; sortState.asc = false; }
+    tableSample.sort((a, b) => sortState.asc ? a[key] > b[key] ? 1 : -1 : a[key] < b[key] ? 1 : -1);
+    const arrow = document.createElement("span");
+    arrow.className = "arrow";
+    arrow.textContent = sortState.asc ? "↑" : "↓";
+    th.appendChild(arrow);
+    renderTable();
+  });
+});
+
+// ================= boot sequence =================
+(async function main(){
+  await loadModel();
+  if(modelReady){
+    await updateEstimator();
+    await buildCustomerPool();
+    updateThreshold();
+  }
+})();
+</script>
+
+</body>
+</html>
