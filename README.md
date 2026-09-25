@@ -1,5 +1,9 @@
 # 🛍️ ShopSphere — AICV TabTransformer
+## 🚀 Live Demo
 
+**Try the interactive ShopSphere AICV application:**
+
+[![Open Live Demo](https://img.shields.io/badge/🚀_Open_Live_Demo-Hugging_Face-orange?style=for-the-badge)](https://huggingface.co/spaces/Mihirrish/ShopSphere-AICV-TabTransformer-v2-Demo)
 ### Algorithm-Induced Customer Churn Volatility Detection using TabTransformer
 
 [![Hugging Face Demo](https://img.shields.io/badge/🤗%20Live%20Demo-Hugging%20Face-yellow)](https://huggingface.co/spaces/Mihirrish/ShopSphere-AICV-Demo)
